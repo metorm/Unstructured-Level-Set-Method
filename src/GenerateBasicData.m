@@ -19,7 +19,7 @@ d=drectangle(p, -0, 1, -0, 1);
 end
 
 function d = fdNotchedCircle( p )
-gRec1=drectangle(p, 0.43, 0.57, 0.6, 0.99);
+gRec1=drectangle(p, 0.43, 0.57, 0.65, 0.99);
 gCircle=dcircle(p, 0.5, 0.65, 0.25);
 d=ddiff(gCircle, gRec1);
 end
