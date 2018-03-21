@@ -6,11 +6,11 @@ config;
 [p,t]=distmesh2d(@fdRec,@huniform,scale,[-0,-0;1,1],...
     [-0,-0;1,-0;-0,1;1,1]);
 
-[C,NC,CMid,NCMid]=buildConnection(t);
+[C,NC,CMid,NCMid,NeighbourCells]=buildConnection(t);
 
 phi=fdNotchedCircle(p);
 
-save(['notchedCircle_' num2str(scale) '.mat'],'C','NC','CMid','NCMid','t','p','phi');
+save(['notchedCircle_' num2str(scale) '.mat'],'C','NC','CMid','NCMid','NeighbourCells','t','p','phi');
 
 %patch('vertices',p,'faces',t,'edgecol','k','FaceVertexCData',(phi>0)*1,'FaceColor','interp');
 
