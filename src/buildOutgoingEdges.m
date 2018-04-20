@@ -7,7 +7,8 @@ xPos=[1, 0];
 xNeg=[-1, 0];
 yPos=[0, 1];
 yNeg=[0, -1];
-divergenceThreshold=cos(deg2rad(50));
+
+global divergenceThreshold;
 
 for idxP=1:NVertices
     crdT=[p(idxP, 1) p(idxP, 2)];

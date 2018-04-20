@@ -1,15 +1,17 @@
-function G = calcGradient(phi, ovData, A, S, edgeWeights, isUseExtrapolation)
+function G = calcGradient(p, phi, ovData, A, S, edgeWeights, isUseExtrapolation)
+isUseExtrapolation=false;
+
 NPoints=size(phi,1);
 % 2D
 G=zeros(NPoints, 2);
-eps=1e-3;
-
-isUseSxyAsMainAxis=size(S,2) > 1;
+eps_=1e-3;
 
 if size(S,2) > 1
+    isUseSxyAsMainAxis=true;
     Sx=S(:,1);
     Sy=S(:,2);
 else
+    isUseSxyAsMainAxis=false;
     Sx=S;
     Sy=S;
 end
@@ -31,18 +33,79 @@ edgeWeights3=edgeWeights(:,3);
 edgeWeights4=edgeWeights(:,4);
 
 global nearZeroThreshold;
+global divergenceThreshold;
 
 for idxP=1:NPoints
     
     crtPhi=phi(idxP);
+    crtCoordinate=p(idxP,:);
     ovEndPhi=phi(ovData5{idxP}{2});
-    %isBesideZero=sum(sign(ovEndPhi) ~= sign(crtPhi)) > 0;
+    isOnZeroContour=(crtPhi > eps_ && sum(ovEndPhi < -eps_) > 0) ...
+        || (crtPhi < -eps_ && sum(ovEndPhi > eps_));
+    %isOnZeroContour=false;
     isBesideZero=abs(crtPhi) < nearZeroThreshold;
     
-    if isBesideZero
-        myOVEdges=ovData5{idxP}{1};
-        myOVEdgesMid=ovData5{idxP}{3};
-        myOVEdgesMidIndices=ovData5{idxP}{4};
+    myOVEdges=ovData5{idxP}{1};
+    myOVEdgesMid=ovData5{idxP}{3};
+    myOVEdgesMidIndices=ovData5{idxP}{4};
+
+    
+    if isOnZeroContour && (~isUseSxyAsMainAxis)
+        
+        % zeroContourEdges: [x1, y1, x2, y2];
+        zeroContourEdges1=zeros(size(myOVEdgesMidIndices));
+        zeroContourEdges2=zeros(size(myOVEdgesMidIndices));
+        nZeroContourEdges=0;
+        
+        for i = 1:size(myOVEdgesMidIndices,1)
+            triangleOtherVertices=myOVEdgesMidIndices(i,:);
+            phiArray=[crtPhi;phi(triangleOtherVertices)];
+            
+            % see if this triangle is on zero contour
+            if sum(phiArray>eps_)>0 && sum(phiArray<-eps_)>0
+                
+                % see if we need to filter the triangle
+                if isUseSxyAsMainAxis
+                    divergence=dot([Sx(idxP) Sy(idxP)], myOVEdgesMid(i, 3:4));
+                    
+                    % check for safe
+                    if abs(divergence) > 1
+                        error('divergence cannot > 1')
+                    end
+                    
+                    if divergence < divergenceThreshold + 0.1
+                        continue;
+                    end
+                end
+                
+                nZeroContourEdges=nZeroContourEdges+1;
+            
+                % find the edge and add to zeroContourEdges
+                [lineSeg1, lineSeg2] = findContourInTriangle(p([idxP, triangleOtherVertices],:), phiArray);
+                zeroContourEdges1(nZeroContourEdges,:)=lineSeg1;
+                zeroContourEdges2(nZeroContourEdges,:)=lineSeg2;
+            end
+        end
+        
+        zeroContourEdges1(nZeroContourEdges+1:end,:)=[];
+        zeroContourEdges2(nZeroContourEdges+1:end,:)=[];
+        
+        % find the nearest point
+        nearestPoint=[];
+        nearestDistance=Inf;
+        for i=1:nZeroContourEdges
+            [xy,dis,~]=distance2curve([zeroContourEdges1(i,:);zeroContourEdges2(i,:)],crtCoordinate);
+            if dis < nearestDistance
+                nearestPoint=xy;
+                nearestDistance=dis;
+            end
+        end
+        
+        % calc real gradient
+        gradientDirection=normr(nearestPoint-crtCoordinate);
+        G(idxP,:)=gradientDirection*(-crtPhi)/nearestDistance;
+
+    elseif isBesideZero
         
         changingAmount=ovEndPhi-crtPhi;
         changingRate=(changingAmount)./(myOVEdges(:,5));
@@ -62,72 +125,57 @@ for idxP=1:NPoints
         
         [GAiming1,OK1] = estimateGradientOnOneDirection(aimingDirection, myOVEdges, changingAmount, changingRate,...
             myOVEdgesMid, myOVEdgesMidIndices, crtPhi, phi, isUseExtrapolation);
-
-        % check & fix the main axis
-%         if crtPhi>0
-%             aimingCoff=-1;
-%         else
-%             aimingCoff=1;
-%         end
-%         divergence=dot(aimingCoff*aimingDirection, normr(GAiming1));
-%         if divergence<0.8 && ~isUseSxyAsMainAxis
-%             %disp(num2str(rad2deg(acos(divergence))));
-%             tempAimingDirection=aimingCoff*normr(GAiming1);
-%             [tempGAiming,tempOK] = estimateGradientOnOneDirection(tempAimingDirection, myOVEdges, changingAmount, changingRate,...
-%                 myOVEdgesMid, myOVEdgesMidIndices, crtPhi, phi, isUseExtrapolation);
-%             if tempOK && (dot(aimingCoff*tempAimingDirection, normr(tempGAiming))<divergence)
-%                 % fix the aiming direction
-%                 aimingDirection=tempAimingDirection;
-%                 GAiming1=tempGAiming;
-%                 
-%                 % or else, abandon the fix and do nothing
-%             end
-%         end
         
-        % if this is reinitial (i.e. isUseSxyAsMainAxis == false), use
-        % Godunov's scheme
-        if ~isUseSxyAsMainAxis
-            % GAiming1 & OK 1 are estimated on aimingDirection
-            % GAiming2 & OK 2 are estimated on -aimingDirection
-            [GAiming2,OK2] = estimateGradientOnOneDirection(-aimingDirection, myOVEdges, changingAmount, changingRate,...
-                myOVEdgesMid, myOVEdgesMidIndices, crtPhi, phi, isUseExtrapolation);
-            if OK1 && OK2
-                if aimingDirection(1) > 0
-                    GXP=GAiming1(1);
-                    GXN=GAiming2(1);
-                else
-                    GXP=GAiming2(1);
-                    GXN=GAiming1(1);
-                end
-                
-                if aimingDirection(2) > 0
-                    GYP=GAiming1(2);
-                    GYN=GAiming2(2);
-                else
-                    GYP=GAiming2(2);
-                    GYN=GAiming1(2);
-                end
-                
-                G(idxP,:)=[Godunov(GXN,GXP,Sx(idxP)) Godunov(GYN,GYP,Sy(idxP))];
-            elseif OK1
-                G(idxP,:)=GAiming1;
-            elseif OK2
-                G(idxP,:)=GAiming2;
-            else
-                error('This cannot happen!');
-            end
-        else
-            % if this is used for evolving, just try another side of the
-            % main axis
-            if ~OK1
-                [GAiming1,OK1] = estimateGradientOnOneDirection(-aimingDirection, myOVEdges, changingAmount, changingRate,...
-                    myOVEdgesMid, myOVEdgesMidIndices, crtPhi, phi, isUseExtrapolation);
-                if ~OK1
-                    error('Estimations of both sides are unavailable!');
-                end
-            end
+        if OK1
             G(idxP,:)=GAiming1;
+        else
+            error('aimingDirection unavailable');
         end
+% 
+%         % if this is reinitial (i.e. isUseSxyAsMainAxis == false), use
+%         % Godunov's scheme
+%         if ~isUseSxyAsMainAxis
+%             % GAiming1 & OK 1 are estimated on aimingDirection
+%             % GAiming2 & OK 2 are estimated on -aimingDirection
+%             [GAiming2,OK2] = estimateGradientOnOneDirection(-aimingDirection, myOVEdges, changingAmount, changingRate,...
+%                 myOVEdgesMid, myOVEdgesMidIndices, crtPhi, phi, isUseExtrapolation);
+%             if OK1 && OK2
+%                 if aimingDirection(1) > 0
+%                     GXP=GAiming1(1);
+%                     GXN=GAiming2(1);
+%                 else
+%                     GXP=GAiming2(1);
+%                     GXN=GAiming1(1);
+%                 end
+%                 
+%                 if aimingDirection(2) > 0
+%                     GYP=GAiming1(2);
+%                     GYN=GAiming2(2);
+%                 else
+%                     GYP=GAiming2(2);
+%                     GYN=GAiming1(2);
+%                 end
+%                 
+%                 G(idxP,:)=[Godunov(GXN,GXP,Sx(idxP)) Godunov(GYN,GYP,Sy(idxP))];
+%             elseif OK1
+%                 G(idxP,:)=GAiming1;
+%             elseif OK2
+%                 G(idxP,:)=GAiming2;
+%             else
+%                 error('This cannot happen!');
+%             end
+%         else
+%             % if this is used for evolving, just try another side of the
+%             % main axis
+%             if ~OK1
+%                 [GAiming1,OK1] = estimateGradientOnOneDirection(-aimingDirection, myOVEdges, changingAmount, changingRate,...
+%                     myOVEdgesMid, myOVEdgesMidIndices, crtPhi, phi, isUseExtrapolation);
+%                 if ~OK1
+%                     error('Estimations of both sides are unavailable!');
+%                 end
+%             end
+%             G(idxP,:)=GAiming1;
+%         end
     else
         % if this vertex is far from phi==0 isosurface
         GXPOK=A1(idxP).OK;
@@ -138,19 +186,19 @@ for idxP=1:NPoints
         
         GXNOK=A2(idxP).OK;
         if GXNOK
-            [GXN,]=calcGradient1Axis1Vertex(phi,crtPhi,...
+            GXN=calcGradient1Axis1Vertex(phi,crtPhi,...
                 ovData2{idxP}{1,2},ovData2{idxP}{1,4},A2(idxP).A,edgeWeights2{idxP});
         end
         
         GYPOK=A3(idxP).OK;
         if GYPOK
-            [GYP,]=calcGradient1Axis1Vertex(phi,crtPhi,...
+            GYP=calcGradient1Axis1Vertex(phi,crtPhi,...
                 ovData3{idxP}{1,2},ovData3{idxP}{1,4},A3(idxP).A,edgeWeights3{idxP});
         end
         
         GYNOK=A4(idxP).OK;
         if GYNOK
-            [GYN,]=calcGradient1Axis1Vertex(phi,crtPhi,...
+            GYN=calcGradient1Axis1Vertex(phi,crtPhi,...
                 ovData4{idxP}{1,2},ovData4{idxP}{1,4},A4(idxP).A,edgeWeights4{idxP});
         end
         
@@ -190,22 +238,80 @@ for idxP=1:NPoints
             end
         end
         
-        if GXPMissing || GXNMissing || GYPMissing || GYNMissing
-            if (GXNMissing) && (abs(GY) < eps) && GX > 0
-                GX=max(0,2-GX);
-            elseif (GYNMissing) && (abs(GX) < eps) && GY > 0
-                GY=max(0,2-GY);
-            elseif (GXPMissing) && (abs(GY) < eps) && GX < 0
-                GX=min(0,-2-GX);
-            elseif (GYPMissing) && (abs(GX) < eps) && GY < 0
-                GY=max(0,-2-GY);
-            end
-        end
+%         if GXPMissing || GXNMissing || GYPMissing || GYNMissing
+%             if (GXNMissing) && (abs(GY) < eps) && GX > 0
+%                 GX=max(0,2-GX);
+%             elseif (GYNMissing) && (abs(GX) < eps) && GY > 0
+%                 GY=max(0,2-GY);
+%             elseif (GXPMissing) && (abs(GY) < eps) && GX < 0
+%                 GX=min(0,-2-GX);
+%             elseif (GYPMissing) && (abs(GX) < eps) && GY < 0
+%                 GY=min(0,-2-GY);
+%             end
+%         end
         
         G(idxP,:)=[GX,GY];
     end
 end
 
+end
+
+function [G,OK]=calcGradientViaExplicitGeometry(myOVEdgesMidIndices, crtPhi, phi, isUseSxyAsMainAxis)
+
+% zeroContourEdges: [x1, y1, x2, y2];
+zeroContourEdges1=zeros(size(myOVEdgesMidIndices));
+zeroContourEdges2=zeros(size(myOVEdgesMidIndices));
+nZeroContourEdges=0;
+
+for i = 1:size(myOVEdgesMidIndices,1)
+    triangleOtherVertices=myOVEdgesMidIndices(i,:);
+    phiArray=[crtPhi;phi(triangleOtherVertices)];
+    signArray=sign(phiArray);
+    
+    % see if this triangle is on zero contour
+    if ~all(signArray == signArray(1))
+        
+        % see if we need to filter the triangle
+        if isUseSxyAsMainAxis
+            divergence=dot([Sx(idxP) Sy(idxP)], myOVEdgesMid(i, 3:4));
+            
+            % check for safe
+            if abs(divergence) > 1
+                error('divergence cannot > 1')
+            end
+            
+            if divergence < divergenceThreshold + 0.1
+                continue;
+            end
+        end
+        
+        nZeroContourEdges=nZeroContourEdges+1;
+        
+        % find the edge and add to zeroContourEdges
+        [lineSeg1, lineSeg2] = findContourInTriangle(p([idxP, triangleOtherVertices],:), phiArray);
+        zeroContourEdges1(nZeroContourEdges,:)=lineSeg1;
+        zeroContourEdges2(nZeroContourEdges,:)=lineSeg2;
+    end
+end
+
+zeroContourEdges1(nZeroContourEdges+1:end,:)=[];
+zeroContourEdges2(nZeroContourEdges+1:end,:)=[];
+
+% find the nearest point
+nearestPoint=[];
+nearestDistance=Inf;
+for i=1:nZeroContourEdges
+    [xy,dis,~]=distance2curve([zeroContourEdges1(i,:);zeroContourEdges2(i,:)],crtCoordinate);
+    if dis < nearestDistance
+        nearestPoint=xy;
+        nearestDistance=dis;
+    end
+end
+
+% calc gradient
+gradientDirection=normr(nearestPoint-crtCoordinate);
+G=gradientDirection*(-crtPhi)/nearestDistance;
+OK=true;
 end
 
 function [GM,OK] = calcGradientViaExtrapolation(divergence,changingRates)

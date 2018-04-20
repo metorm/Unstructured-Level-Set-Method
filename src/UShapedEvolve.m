@@ -1,21 +1,25 @@
 clc;
 clear;
 config;
-load(['notchedCircle_' num2str(scale) '.mat']);
+load(['U_Region_' num2str(scale) '.mat']);
 
 NPoints=size(phi,1);
+Rsf=0.5;
 
-centerBasedCoordinate=p-center;
-velocity=normr(centerBasedCoordinate);
-velocity=[velocity(:,2),-velocity(:,1)] .* sqrt(centerBasedCoordinate(:,1).^2+centerBasedCoordinate(:,2).^2);
+velocity=ones(size(p,1),1);
+velocity(p(:,1)<0.6)=Rsf;
+velocity(p(:,1)<0.3)=Rsf*Rsf;
 
 disp('Building edges ...')
 ovData=buildOutgoingEdges(p,C,NC,CMid,NCMid);
 [A,edgeWeights]=buildMatrixA(ovData);
 disp('Building edges done.')
 
+disp('Building triangle basic data ...')
+[triangleOutNorms ,cornerNorm, areas]=generateTriangleNorms(p, t);
+disp('Building triangle basic data done.')
 
-NEvolove=2000;
+NEvolove=80;
 NWriteInterval=5;
 Result=cell(round(NEvolove/NWriteInterval)+1,1);
 
@@ -24,7 +28,8 @@ isoLines=[-0.2:0.02:-0.04, -0.02:0.01:0.02, 0.04:0.02:0.4];
 for r=1:30
     disp(['Reinitial ' num2str(r) ' ' datestr(now,13)]);
     
-    GReinitial=calcGradient(p, phi, ovData, A, phi, edgeWeights, true);
+    %GReinitial=calcGradient(p, phi, ovData, A, phi, edgeWeights, true);
+    GReinitial=calcGradientViaIntegral(t, triangleOutNorms ,cornerNorm, areas, phi);
     S=phi./sqrt(phi.^2+(scale*0.8)^2);
     deltaAmountReinitial=S .* (sqrt(GReinitial(:,1).^2+GReinitial(:,2).^2)-1) * reinitialStep;
     phi=phi-deltaAmountReinitial;
@@ -51,26 +56,30 @@ for e=1:NEvolove
     end
     
     
-    GEvolve=calcGradient(p, phi, ovData, A, velocity, edgeWeights, true);
-    crtNormalVelocity=dot(GEvolve,velocity,2);
-    deltaAmountEvolve=crtNormalVelocity * evolveStep;
+    %GEvolve=calcGradient(p, phi, ovData, A, velocity, edgeWeights, true);
+    GEvolve=calcGradientViaIntegral(t, triangleOutNorms ,cornerNorm, areas, phi);
+    GEvolveModule=sqrt(GEvolve(:,1).^2 + GEvolve(:,2).^2);
+    deltaAmountEvolve=GEvolveModule .* velocity * evolveStep;
     intermediaPhi=phi-0.5*deltaAmountEvolve;
     
-    GEvolve=calcGradient(p, intermediaPhi, ovData, A, velocity, edgeWeights, true);
-    crtNormalVelocity=dot(GEvolve,velocity,2);
-    deltaAmountEvolve=crtNormalVelocity * evolveStep;
+    %GEvolve=calcGradient(p, intermediaPhi, ovData, A, velocity, edgeWeights, true);
+    GEvolve=calcGradientViaIntegral(t, triangleOutNorms ,cornerNorm, areas, intermediaPhi);
+    GEvolveModule=sqrt(GEvolve(:,1).^2 + GEvolve(:,2).^2);
+    deltaAmountEvolve=GEvolveModule .* velocity * evolveStep;
     phi=phi-deltaAmountEvolve;
     
-    NR=5;
+    NR=10;
     for r=1:NR
         disp(['Reinitial ' num2str(r) ' ' datestr(now,13)]);
         
-        GReinitial=calcGradient(p, phi, ovData, A, phi, edgeWeights, true);
+        %GReinitial=calcGradient(p, phi, ovData, A, phi, edgeWeights, true);
+        GReinitial=calcGradientViaIntegral(t, triangleOutNorms ,cornerNorm, areas, phi);
         S=phi./sqrt(phi.^2+(scale*1)^2);
         deltaAmountReinitial=S .* (sqrt(GReinitial(:,1).^2+GReinitial(:,2).^2)-1) * reinitialStep;
         intermediaPhi=phi-0.5*deltaAmountReinitial;
         
-        GReinitial=calcGradient(p, intermediaPhi, ovData, A, phi, edgeWeights, true);
+        %GReinitial=calcGradient(p, intermediaPhi, ovData, A, phi, edgeWeights, true);
+        GReinitial=calcGradientViaIntegral(t, triangleOutNorms ,cornerNorm, areas, intermediaPhi);
         S=phi./sqrt(intermediaPhi.^2+(scale*1)^2);
         deltaAmountReinitial=S .* (sqrt(GReinitial(:,1).^2+GReinitial(:,2).^2)-1) * reinitialStep;
         phi=phi-deltaAmountReinitial;
@@ -80,6 +89,7 @@ for e=1:NEvolove
     if mod(e,1)==0
         clf;
         subplot(2,2,1);
+        grid on;
         %trisurf(t,p(:,1),p(:,2),phi,'EraseMode','xor');
         %patch('vertices',p,'faces',t,'edgecol','k','FaceVertexCData',S,'FaceColor','interp','EraseMode','xor');
         tricontour(p,t,phi,isoLines);

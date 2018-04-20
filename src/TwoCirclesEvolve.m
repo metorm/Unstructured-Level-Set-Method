@@ -1,22 +1,21 @@
 clc;
 clear;
 config;
-load(['notchedCircle_' num2str(scale) '.mat']);
+load(['2Circles_' num2str(scale) '.mat']);
 
 NPoints=size(phi,1);
+Rsf=0.5;
 
-centerBasedCoordinate=p-center;
-velocity=normr(centerBasedCoordinate);
-velocity=[velocity(:,2),-velocity(:,1)] .* sqrt(centerBasedCoordinate(:,1).^2+centerBasedCoordinate(:,2).^2);
+velocity=ones(size(p,1),1);
+velocity(p(:,1) - 0.5 < 0.5 - p(:,2))=Rsf;
 
 disp('Building edges ...')
 ovData=buildOutgoingEdges(p,C,NC,CMid,NCMid);
 [A,edgeWeights]=buildMatrixA(ovData);
 disp('Building edges done.')
 
-
-NEvolove=2000;
-NWriteInterval=5;
+NEvolove=80;
+NWriteInterval=2;
 Result=cell(round(NEvolove/NWriteInterval)+1,1);
 
 isoLines=[-0.2:0.02:-0.04, -0.02:0.01:0.02, 0.04:0.02:0.4];
@@ -52,16 +51,16 @@ for e=1:NEvolove
     
     
     GEvolve=calcGradient(p, phi, ovData, A, velocity, edgeWeights, true);
-    crtNormalVelocity=dot(GEvolve,velocity,2);
-    deltaAmountEvolve=crtNormalVelocity * evolveStep;
+    GEvolveModule=sqrt(GEvolve(:,1).^2 + GEvolve(:,2).^2);
+    deltaAmountEvolve=GEvolveModule .* velocity * evolveStep;
     intermediaPhi=phi-0.5*deltaAmountEvolve;
     
     GEvolve=calcGradient(p, intermediaPhi, ovData, A, velocity, edgeWeights, true);
-    crtNormalVelocity=dot(GEvolve,velocity,2);
-    deltaAmountEvolve=crtNormalVelocity * evolveStep;
+    GEvolveModule=sqrt(GEvolve(:,1).^2 + GEvolve(:,2).^2);
+    deltaAmountEvolve=GEvolveModule .* velocity * evolveStep;
     phi=phi-deltaAmountEvolve;
     
-    NR=5;
+    NR=10;
     for r=1:NR
         disp(['Reinitial ' num2str(r) ' ' datestr(now,13)]);
         
@@ -80,6 +79,7 @@ for e=1:NEvolove
     if mod(e,1)==0
         clf;
         subplot(2,2,1);
+        grid on;
         %trisurf(t,p(:,1),p(:,2),phi,'EraseMode','xor');
         %patch('vertices',p,'faces',t,'edgecol','k','FaceVertexCData',S,'FaceColor','interp','EraseMode','xor');
         tricontour(p,t,phi,isoLines);
@@ -110,3 +110,5 @@ for e=1:NEvolove
         drawnow;
     end
 end
+
+save resultData/2Circles_0.025_Explicit.mat Result
