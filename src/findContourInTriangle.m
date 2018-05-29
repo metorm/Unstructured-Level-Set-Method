@@ -3,21 +3,25 @@ function [lineSeg1, lineSeg2] = findContourInTriangle(coordinates, phi)
 % phi*: 3x1 value of phi on 3 vertices
 % output: lineSeg*: [x, y] 2 ends of the line segment
 
-if sum(size(phi) == [3, 1]) ~= 2
+if any(size(phi) ~= [3, 1])
     error('size(phi) shall be 3x1');
 end
 
-signArray = sign(phi);
 
-if signArray(1) == signArray(2) && signArray(1) ~= signArray(3)
+isEdge12Cutted= (phi(1)>=0 && phi(2) < 0) || (phi(1)<=0 && phi(2) > 0);
+isEdge23Cutted= (phi(2)>=0 && phi(3) < 0) || (phi(2)<=0 && phi(3) > 0);
+isEdge31Cutted= (phi(3)>=0 && phi(1) < 0) || (phi(3)<=0 && phi(1) > 0);
+
+
+if (isEdge31Cutted && isEdge23Cutted)
     % check on Edge 13 and 23
     lineSeg1 = findZeroOnEdgeWrapper(1, 3, coordinates, phi);
     lineSeg2 = findZeroOnEdgeWrapper(2, 3, coordinates, phi);
-elseif signArray(1) == signArray(3) && signArray(1) ~= signArray(2)
+elseif (isEdge12Cutted && isEdge23Cutted)
     % check on Edge 12 and 23
     lineSeg1 = findZeroOnEdgeWrapper(1, 2, coordinates, phi);
     lineSeg2 = findZeroOnEdgeWrapper(2, 3, coordinates, phi);
-elseif signArray(2) == signArray(3) && signArray(2) ~= signArray(1)
+elseif (isEdge12Cutted && isEdge31Cutted)
     % check on Edge 12 and 13
     lineSeg1 = findZeroOnEdgeWrapper(1, 2, coordinates, phi);
     lineSeg2 = findZeroOnEdgeWrapper(1, 3, coordinates, phi);

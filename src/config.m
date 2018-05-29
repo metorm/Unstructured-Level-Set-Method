@@ -1,15 +1,17 @@
 global scale;
-scale=0.025;
+scale=0.01;
 
 global divergenceThreshold;
-divergenceThreshold=0.5;
+divergenceThreshold=0.65;
 
-global nearZeroThreshold;
-nearZeroThreshold=0.1;
-
-global extrapolationThreshold;
-extrapolationThreshold=0.06;
+global eps_;
+eps_=1e-3;
 
 center=[0.5, 0.5];
-evolveStep=0.005;
-reinitialStep=0.009;
+evolveStep=0.004;
+reinitialStep=0.007;
+
+global scaleStick;
+scaleStick=0.005;
+evolveStepStick=0.003;
+reinitialStepStick=0.001;
