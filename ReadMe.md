@@ -1,4 +1,4 @@
-# UnstructuredLevelSetMethod
+# Unstructured Level Set Method
 Robust 3D Level Set Method for Evolving Fronts on Complex Unstructured Meshes
 
 # Introduction
