@@ -3,7 +3,7 @@ clear;
 config;
 
 %% load mesh
-load(['2Circles_' num2str(scale) '.mat']);
+load(['3Circles_' num2str(scale) '.mat']);
 NPoints=size(phi,1);
 
 %% initial phi

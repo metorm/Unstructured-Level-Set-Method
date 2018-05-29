@@ -32,7 +32,6 @@ for r=1:30
     disp(['Reinitial ' num2str(r) ' ' datestr(now,13)]);
     
     GReinitial=calcGradient(p, phi, ovData, A, phi, edgeWeights);
-    %GReinitial=calcGradientViaIntegral(t, triangleOutNorms ,cornerNorm, areas, phi);
     S=phi./sqrt(phi.^2+(scale*0.8)^2);
     deltaAmountReinitial=S .* (sqrt(GReinitial(:,1).^2+GReinitial(:,2).^2)-1) * reinitialStep;
     phi=phi-deltaAmountReinitial;
@@ -59,13 +58,11 @@ for idx=1:NEvolove
         disp(['Reinitial ' num2str(r) ' ' datestr(now,13)]);
         
         GReinitial=calcGradient(p, phi, ovData, A, phi, edgeWeights);
-        %GReinitial=calcGradientViaIntegral(t, triangleOutNorms ,cornerNorm, areas, phi);
         S=phi./sqrt(phi.^2+(scale*1)^2);
         deltaAmountReinitial=S .* (sqrt(GReinitial(:,1).^2+GReinitial(:,2).^2)-1) * reinitialStep;
         intermediaPhi=phi-0.5*deltaAmountReinitial;
         
         GReinitial=calcGradient(p, intermediaPhi, ovData, A, phi, edgeWeights);
-        %GReinitial=calcGradientViaIntegral(t, triangleOutNorms ,cornerNorm, areas, intermediaPhi);
         S=phi./sqrt(intermediaPhi.^2+(scale*1)^2);
         deltaAmountReinitial=S .* (sqrt(GReinitial(:,1).^2+GReinitial(:,2).^2)-1) * reinitialStep;
         phi=phi-deltaAmountReinitial;
